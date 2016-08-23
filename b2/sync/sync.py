@@ -10,6 +10,7 @@
 
 from __future__ import division
 
+import logging
 import re
 import six
 
@@ -21,6 +22,8 @@ try:
     import concurrent.futures as futures
 except ImportError:
     import futures
+
+logger = logging.getLogger(__name__)
 
 
 def next_or_none(iterator):
@@ -186,5 +189,9 @@ def sync_folders(source_folder, dest_folder, args, now_millis, stdout, no_progre
 
         # Wait for everything to finish
         sync_executor.shutdown()
-        if any(1 for f in action_futures if f.exception() is not None):
+        results = (f.exception() for f in action_futures)
+        exceptions = [result for result in results if result is not None]
+        for exception in exceptions:
+            logger.error('exception occurred in sync action: %s', exception)
+        if exceptions:
             raise CommandError('sync is incomplete')
