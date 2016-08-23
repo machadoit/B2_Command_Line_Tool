@@ -12,6 +12,7 @@ from __future__ import absolute_import, print_function
 
 import getpass
 import json
+import logging
 import os
 import signal
 import sys
@@ -34,6 +35,9 @@ from .raw_api import (test_raw_api)
 from .sync import parse_sync_folder, sync_folders
 from .utils import (current_time_millis, set_shutting_down)
 from .version import (VERSION)
+
+
+logger = logging.getLogger(__name__)
 
 
 def local_path_to_b2_path(path):
@@ -64,6 +68,9 @@ class Command(object):
     # True with a command line option "--fast".  All option flags
     # default to False.
     OPTION_FLAGS = []
+
+    # Global option flags.  Not shown in help.
+    GLOBAL_OPTION_FLAGS = ['log']
 
     # Explicit arguments.  These always come before the positional arguments.
     # Putting "color" here means you can put something like "--color blue" on
@@ -119,7 +126,7 @@ class Command(object):
     def parse_arg_list(self, arg_list):
         return parse_arg_list(
             arg_list,
-            option_flags=self.OPTION_FLAGS,
+            option_flags=self.OPTION_FLAGS + self.GLOBAL_OPTION_FLAGS,
             option_args=self.OPTION_ARGS,
             list_args=self.LIST_ARGS,
             required=self.REQUIRED,
@@ -802,6 +809,14 @@ class ConsoleTool(object):
             self._print_stderr(command.command_usage())
             return 1
 
+        if args.log:
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler = logging.FileHandler('b2_cli.log')
+            handler.setLevel(logging.DEBUG)
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+            logger.setLevel(logging.DEBUG)
+
         try:
             return command.run(args)
         except MissingAccountData as e:
@@ -809,6 +824,7 @@ class ConsoleTool(object):
             return 1
         except B2Error as e:
             self._print_stderr('ERROR: %s' % (str(e),))
+            logger.exception(e)
             return 1
         except KeyboardInterrupt:
             self._print('\nInterrupted.  Shutting down...\n')
@@ -883,5 +899,8 @@ def main():
     # This happens when using sync to upload files.
     sys.stdout.flush()
     sys.stderr.flush()
+
+    logging.shutdown()
+
     os._exit(exit_status)
     # sys.exit(exit_status)
